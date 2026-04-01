@@ -3,31 +3,41 @@ import os
 import json
 from datetime import datetime
 import pandas as pd
-import sys
-sys.path.append(os.path.expanduser("~/가계부분석"))
-from sample_data import df as raw_df
+from supabase import create_client
+
+# ── Supabase 연결 ──────────────────────────────────────
+SUPABASE_URL = "https://axzfcsqkfpgraetawgqp.supabase.co"
+SUPABASE_KEY = "sb_publishable_msAtmlySUP3-6KtP4Cjflw_21wAm8cd"
+db = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ── 설정 ──────────────────────────────────────────────
-BUDGET_STEPS = [1000000, 1500000, 2000000, 2500000, 3000000]  # 100만~300만
+BUDGET_STEPS = [1000000, 1500000, 2000000, 2500000, 3000000]
 STEP_LABELS  = ["100만원", "150만원", "200만원", "250만원", "300만원"]
-ALERT_LOG    = os.path.expanduser("~/가계부분析/alert_log.json")
 
 SAVING_CATS = ['기태 예금', '기태 주택청약', '기태 IRP', '희정 적금', '희정 주택청약', '희정 IRP']
 INVEST_CATS = ['기태 주식', '희정 주식']
 
-# ── 토큰 로드 ──────────────────────────────────────────
-tokens = {}
-with open(os.path.expanduser("~/가계부분析/.env")) as f:
-    for line in f:
-        line = line.strip()
-        if "=" in line:
-            key, val = line.split("=", 1)
-            tokens[key] = val
+# ── 토큰 로드 (로컬은 .env, GitHub Actions는 환경변수) ──
+def load_tokens():
+    # 환경변수 먼저 확인 (GitHub Actions)
+    wife    = os.environ.get("KAKAO_ACCESS_TOKEN")
+    husband = os.environ.get("KAKAO_ACCESS_TOKEN_HUSBAND")
+    if wife and husband:
+        return wife, husband
+    # 없으면 .env 파일에서 읽기 (로컬)
+    env_path = os.path.expanduser("~/가계부분析/.env")
+    tokens = {}
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if "=" in line:
+                key, val = line.split("=", 1)
+                tokens[key] = val
+    return tokens["KAKAO_ACCESS_TOKEN"], tokens["KAKAO_ACCESS_TOKEN_HUSBAND"]
 
-TOKEN_WIFE    = tokens.get("KAKAO_ACCESS_TOKEN")
-TOKEN_HUSBAND = tokens.get("KAKAO_ACCESS_TOKEN_HUSBAND")
+TOKEN_WIFE, TOKEN_HUSBAND = load_tokens()
 
-# ── 카카오 메시지 발송 함수 ────────────────────────────
+# ── 카카오 메시지 발송 ─────────────────────────────────
 def send_kakao(token, message):
     url = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
     data = {
@@ -49,28 +59,24 @@ def send_both(message):
 today = datetime.today()
 this_month = today.strftime("%Y-%m")
 
-df = raw_df.copy()
+response = db.table("transactions").select("*").execute()
+df = pd.DataFrame(response.data)
+df["date"] = pd.to_datetime(df["date"])
+df["month"] = df["date"].dt.strftime("%Y-%m")
+
 expense = df[(df["type"] == "expense") & (df["month"] == this_month)].copy()
 expense["분류"] = expense["category"].apply(
     lambda c: "저축" if c in SAVING_CATS else ("투자" if c in INVEST_CATS else "소비")
 )
-
 consume_total = int(expense[expense["분류"] == "소비"]["amount"].sum())
 
 print(f"📅 {this_month} 소비 합계: {consume_total:,}원")
-print()
 
-# ── 알림 로그 불러오기 (이미 보낸 단계 확인) ────────────
-if os.path.exists(ALERT_LOG):
-    with open(ALERT_LOG) as f:
-        log = json.load(f)
-else:
-    log = {}
-
-sent_steps = log.get(this_month, [])
+# ── 이미 보낸 알림 확인 (Supabase) ────────────────────
+sent = db.table("alert_log").select("label").eq("month", this_month).execute()
+sent_steps = [row["label"] for row in sent.data]
 
 # ── 초과된 단계 알림 발송 ──────────────────────────────
-new_alerts = []
 for step, label in zip(BUDGET_STEPS, STEP_LABELS):
     if consume_total >= step and label not in sent_steps:
         over = consume_total - step
@@ -85,28 +91,12 @@ for step, label in zip(BUDGET_STEPS, STEP_LABELS):
         )
         print(f"🚨 [{label} 초과] 알림 발송!")
         send_both(msg)
-        new_alerts.append(label)
+        db.table("alert_log").insert({"month": this_month, "label": label}).execute()
 
-# ── 아직 안 넘은 다음 단계 안내 ────────────────────────
-remaining_steps = [
-    (step, label) for step, label in zip(BUDGET_STEPS, STEP_LABELS)
-    if consume_total < step
-]
-if remaining_steps:
-    next_step, next_label = remaining_steps[0]
-    left = next_step - consume_total
-    print(f"✅ 다음 알림 기준 [{next_label}]까지 {left:,}원 남았어요.")
+# ── 다음 단계 안내 ─────────────────────────────────────
+remaining = [(s, l) for s, l in zip(BUDGET_STEPS, STEP_LABELS) if consume_total < s]
+if remaining:
+    next_step, next_label = remaining[0]
+    print(f"✅ 다음 알림 기준 [{next_label}]까지 {next_step - consume_total:,}원 남았어요.")
 else:
     print("⚠️ 모든 예산 단계를 초과했어요!")
-
-# ── 로그 저장 ──────────────────────────────────────────
-if new_alerts:
-    log[this_month] = sent_steps + new_alerts
-    with open(ALERT_LOG, "w") as f:
-        json.dump(log, f, ensure_ascii=False, indent=2)
-    print(f"\n📝 알림 로그 저장: {new_alerts}")
-else:
-    if not sent_steps:
-        print("\n✅ 아직 초과된 예산 단계가 없어요.")
-    else:
-        print(f"\n✅ 이미 발송된 알림: {sent_steps} (중복 발송 없음)")
