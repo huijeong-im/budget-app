@@ -1,0 +1,47 @@
+name: 가계부 입력 알림
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # 매일 오후 5시 (한국시간 = UTC 8시)
+  workflow_dispatch:       # 수동 실행 버튼
+
+jobs:
+  input-reminder:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 가져오기
+        uses: actions/checkout@v3
+
+      - name: Python 설치
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: 라이브러리 설치
+        run: pip install requests
+
+      - name: 가계부 입력 알림 발송
+        run: |
+          python3 -c "
+          import requests
+
+          BOT_TOKEN = '8533743870:AAGvNrJ2uEXg-dcr9Yzdmu82lndimMJtsCA'
+          CHAT_IDS = ['8783395762', '7169251813']
+
+          msg = '''💸 기태희정의 가계부 입력 시간!
+          ━━━━━━━━━━━━━━━━━━
+          오늘 쓴 돈, 지금 안 적으면 영원히 사라져요 👻
+
+          티끌 모아 태산! 오늘도 가계부 입력하고
+          우리 함께 부자 부부가 되어봐요 💑💰
+
+          👉 https://choigang-budget.streamlit.app'''
+
+          for chat_id in CHAT_IDS:
+              res = requests.post(
+                  f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage',
+                  data={'chat_id': chat_id, 'text': msg}
+              )
+              print(f'chat_id {chat_id}: {res.json().get(\"ok\")}')
+          "
