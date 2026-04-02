@@ -8,7 +8,7 @@ import anthropic
 
 # ── 페이지 설정 ────────────────────────────────────────
 st.set_page_config(
-    page_title="최강부부 가계부",
+    page_title="기태희정의 가계부",
     page_icon="💑",
     layout="centered"
 )
@@ -48,7 +48,7 @@ def load_data():
     return df
 
 # ── 탭 구성 ────────────────────────────────────────────
-st.title("💑 최강부부 가계부")
+st.title("💑 기태희정의 가계부")
 tab1, tab2, tab3 = st.tabs(["📝 입력", "📊 대시보드", "💬 챗봇"])
 
 # ════════════════════════════════════════════════════
@@ -216,7 +216,7 @@ with tab3:
         with st.chat_message("assistant"):
             with st.spinner("분석 중..."):
                 data_summary = get_data_summary()
-                system_prompt = f"""너는 최강부부의 가계부 AI 어시스턴트야.
+                system_prompt = f"""너는 기태와 희정 부부의 가계부 AI 어시스턴트야.
 아래는 최근 3개월간의 가계부 데이터야:
 
 {data_summary}
