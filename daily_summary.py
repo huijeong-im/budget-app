@@ -1,9 +1,9 @@
 import requests
-import os
 import json
 from datetime import datetime
 import pandas as pd
 from supabase import create_client
+from kakao_token import load_tokens
 
 # ── Supabase 연결 ──────────────────────────────────────
 SUPABASE_URL = "https://axzfcsqkfpgraetawgqp.supabase.co"
@@ -14,22 +14,6 @@ SAVING_CATS = ['기태 예금', '기태 주택청약', '기태 IRP', '희정 적
 INVEST_CATS = ['기태 주식', '희정 주식']
 BUDGET_STEPS = [1000000, 1500000, 2000000, 2500000, 3000000]
 STEP_LABELS  = ["100만원", "150만원", "200만원", "250만원", "300만원"]
-
-# ── 토큰 로드 ──────────────────────────────────────────
-def load_tokens():
-    wife    = os.environ.get("KAKAO_ACCESS_TOKEN")
-    husband = os.environ.get("KAKAO_ACCESS_TOKEN_HUSBAND")
-    if wife and husband:
-        return wife, husband
-    env_path = os.path.expanduser("~/가계부분析/.env")
-    tokens = {}
-    with open(env_path) as f:
-        for line in f:
-            line = line.strip()
-            if "=" in line:
-                key, val = line.split("=", 1)
-                tokens[key] = val
-    return tokens["KAKAO_ACCESS_TOKEN"], tokens["KAKAO_ACCESS_TOKEN_HUSBAND"]
 
 TOKEN_WIFE, TOKEN_HUSBAND = load_tokens()
 
@@ -80,7 +64,7 @@ else:
 
 # ── 메시지 작성 ────────────────────────────────────────
 msg = (
-    f"📊 최강부부 가계부 일일 리포트\n"
+    f"📊 기태희정의 가계부 일일 리포트\n"
     f"━━━━━━━━━━━━━━━━━━\n"
     f"📅 {this_month} 누계 ({today.day}일 기준)\n\n"
     f"💸 소비: {consume_total:,}원\n"

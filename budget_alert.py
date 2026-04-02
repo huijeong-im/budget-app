@@ -1,39 +1,19 @@
 import requests
-import os
 import json
 from datetime import datetime
 import pandas as pd
 from supabase import create_client
+from kakao_token import load_tokens
 
 # ── Supabase 연결 ──────────────────────────────────────
 SUPABASE_URL = "https://axzfcsqkfpgraetawgqp.supabase.co"
 SUPABASE_KEY = "sb_publishable_msAtmlySUP3-6KtP4Cjflw_21wAm8cd"
 db = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ── 설정 ──────────────────────────────────────────────
 BUDGET_STEPS = [1000000, 1500000, 2000000, 2500000, 3000000]
 STEP_LABELS  = ["100만원", "150만원", "200만원", "250만원", "300만원"]
-
 SAVING_CATS = ['기태 예금', '기태 주택청약', '기태 IRP', '희정 적금', '희정 주택청약', '희정 IRP']
 INVEST_CATS = ['기태 주식', '희정 주식']
-
-# ── 토큰 로드 (로컬은 .env, GitHub Actions는 환경변수) ──
-def load_tokens():
-    # 환경변수 먼저 확인 (GitHub Actions)
-    wife    = os.environ.get("KAKAO_ACCESS_TOKEN")
-    husband = os.environ.get("KAKAO_ACCESS_TOKEN_HUSBAND")
-    if wife and husband:
-        return wife, husband
-    # 없으면 .env 파일에서 읽기 (로컬)
-    env_path = os.path.expanduser("~/가계부분析/.env")
-    tokens = {}
-    with open(env_path) as f:
-        for line in f:
-            line = line.strip()
-            if "=" in line:
-                key, val = line.split("=", 1)
-                tokens[key] = val
-    return tokens["KAKAO_ACCESS_TOKEN"], tokens["KAKAO_ACCESS_TOKEN_HUSBAND"]
 
 TOKEN_WIFE, TOKEN_HUSBAND = load_tokens()
 
@@ -44,7 +24,7 @@ def send_kakao(token, message):
         "template_object": json.dumps({
             "object_type": "text",
             "text": message,
-            "link": {"web_url": "https://example.com"}
+            "link": {"web_url": "https://choigang-budget.streamlit.app"}
         }, ensure_ascii=False)
     }
     res = requests.post(url, headers={"Authorization": f"Bearer {token}"}, data=data)
@@ -81,7 +61,7 @@ for step, label in zip(BUDGET_STEPS, STEP_LABELS):
     if consume_total >= step and label not in sent_steps:
         over = consume_total - step
         msg = (
-            f"⚠️ 최강부부 가계부 예산 알림\n"
+            f"⚠️ 기태희정의 가계부 예산 알림\n"
             f"━━━━━━━━━━━━━━━━━━\n"
             f"📅 {this_month} 소비가 {label}을 넘었어요!\n\n"
             f"💸 현재 소비: {consume_total:,}원\n"

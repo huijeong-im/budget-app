@@ -1,9 +1,9 @@
 import requests
-import os
 import json
 from datetime import datetime
 import pandas as pd
 from supabase import create_client
+from kakao_token import load_tokens
 
 # ── Supabase 연결 ──────────────────────────────────────
 SUPABASE_URL = "https://axzfcsqkfpgraetawgqp.supabase.co"
@@ -12,22 +12,6 @@ db = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 SAVING_CATS = ['기태 예금', '기태 주택청약', '기태 IRP', '희정 적금', '희정 주택청약', '희정 IRP']
 INVEST_CATS = ['기태 주식', '희정 주식']
-
-# ── 토큰 로드 ──────────────────────────────────────────
-def load_tokens():
-    wife    = os.environ.get("KAKAO_ACCESS_TOKEN")
-    husband = os.environ.get("KAKAO_ACCESS_TOKEN_HUSBAND")
-    if wife and husband:
-        return wife, husband
-    env_path = os.path.expanduser("~/가계부분析/.env")
-    tokens = {}
-    with open(env_path) as f:
-        for line in f:
-            line = line.strip()
-            if "=" in line:
-                key, val = line.split("=", 1)
-                tokens[key] = val
-    return tokens["KAKAO_ACCESS_TOKEN"], tokens["KAKAO_ACCESS_TOKEN_HUSBAND"]
 
 TOKEN_WIFE, TOKEN_HUSBAND = load_tokens()
 
@@ -60,7 +44,7 @@ df["date"] = pd.to_datetime(df["date"])
 df["month"] = df["date"].dt.strftime("%Y-%m")
 df["year"]  = df["date"].dt.strftime("%Y")
 
-def classify(c, df_ref=None):
+def classify(c):
     if c in SAVING_CATS:
         return "저축"
     if c in INVEST_CATS:
@@ -77,19 +61,15 @@ consume_total = int(expense[expense["분류"] == "소비"]["amount"].sum())
 saving_total  = int(expense[expense["분류"] == "저축"]["amount"].sum())
 invest_total  = int(expense[expense["분류"] == "투자"]["amount"].sum())
 
-# 저축률
 saving_rate = (saving_total / income_total * 100) if income_total > 0 else 0
 
-# TOP 3 지출 카테고리
-cat_df = expense[expense["분류"] == "소비"].groupby("category")["amount"].sum().sort_values(ascending=False)
-top3 = cat_df.head(3)
+top3 = expense[expense["분류"] == "소비"].groupby("category")["amount"].sum().sort_values(ascending=False).head(3)
 top3_str = ""
 for i, (cat, amt) in enumerate(top3.items(), 1):
     top3_str += f"{i}. {cat}: {amt/10000:.0f}만원\n"
 
 # ── 올해 누적 집계 ─────────────────────────────────────
-yearly = df[df["year"] == this_year].copy()
-yearly_exp = yearly[yearly["type"] == "expense"].copy()
+yearly_exp = df[(df["year"] == this_year) & (df["type"] == "expense")].copy()
 yearly_exp["분류"] = yearly_exp["category"].apply(classify)
 
 yearly_consume = int(yearly_exp[yearly_exp["분류"] == "소비"]["amount"].sum())
