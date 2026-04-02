@@ -22,4 +22,6 @@ jobs:
         run: pip install requests
 
       - name: 환율 알림 발송
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python exchange_rate.py
