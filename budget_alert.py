@@ -4,6 +4,7 @@ from datetime import datetime
 import pandas as pd
 from supabase import create_client
 from kakao_token import load_tokens
+from telegram_notify import send_both as telegram_both
 
 # ── Supabase 연결 ──────────────────────────────────────
 SUPABASE_URL = "https://axzfcsqkfpgraetawgqp.supabase.co"
@@ -71,6 +72,7 @@ for step, label in zip(BUDGET_STEPS, STEP_LABELS):
         )
         print(f"🚨 [{label} 초과] 알림 발송!")
         send_both(msg)
+        telegram_both(msg)
         db.table("alert_log").insert({"month": this_month, "label": label}).execute()
 
 # ── 다음 단계 안내 ─────────────────────────────────────

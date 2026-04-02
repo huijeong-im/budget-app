@@ -4,6 +4,7 @@ from datetime import datetime
 import pandas as pd
 from supabase import create_client
 from kakao_token import load_tokens
+from telegram_notify import send_both as telegram_both
 
 # ── Supabase 연결 ──────────────────────────────────────
 SUPABASE_URL = "https://axzfcsqkfpgraetawgqp.supabase.co"
@@ -76,4 +77,5 @@ msg = (
 print(msg)
 print("\n발송 중...")
 send_both(msg)
+telegram_both(msg)
 print("✅ 완료!")
