@@ -4,6 +4,7 @@ from datetime import date
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import anthropic
 
 # ── 페이지 설정 ────────────────────────────────────────
 st.set_page_config(
@@ -48,7 +49,7 @@ def load_data():
 
 # ── 탭 구성 ────────────────────────────────────────────
 st.title("💑 최강부부 가계부")
-tab1, tab2 = st.tabs(["📝 입력", "📊 대시보드"])
+tab1, tab2, tab3 = st.tabs(["📝 입력", "📊 대시보드", "💬 챗봇"])
 
 # ════════════════════════════════════════════════════
 # 탭 1: 입력
@@ -166,3 +167,71 @@ with tab2:
         else:
             st.info("이번달 소비 데이터가 없어요.")
 
+# ════════════════════════════════════════════════════
+# 탭 3: 챗봇
+# ════════════════════════════════════════════════════
+with tab3:
+    st.markdown("**💬 가계부 AI 어시스턴트**")
+    st.caption("가계부 데이터에 대해 자유롭게 질문해보세요!")
+
+    # 대화 기록 초기화
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # 이전 대화 표시
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.write(msg["content"])
+
+    # 가계부 데이터 요약 준비
+    def get_data_summary():
+        df = load_data()
+        if df.empty:
+            return "아직 입력된 데이터가 없습니다."
+        summary_lines = []
+        for month in sorted(df["month"].unique(), reverse=True)[:3]:
+            mdf = df[df["month"] == month]
+            edf = mdf[mdf["type"] == "expense"].copy()
+            edf["분류"] = edf["category"].apply(
+                lambda c: "저축" if c in SAVING_CATS else ("투자" if c in INVEST_CATS else "소비")
+            )
+            income = int(mdf[mdf["type"] == "income"]["amount"].sum())
+            consume = int(edf[edf["분류"] == "소비"]["amount"].sum())
+            saving = int(edf[edf["분류"] == "저축"]["amount"].sum())
+            invest = int(edf[edf["분류"] == "투자"]["amount"].sum())
+            cat_detail = edf[edf["분류"] == "소비"].groupby("category")["amount"].sum().to_dict()
+            cat_str = ", ".join([f"{k}: {v:,}원" for k, v in cat_detail.items()])
+            summary_lines.append(
+                f"[{month}] 수입: {income:,}원 / 소비: {consume:,}원 / 저축: {saving:,}원 / 투자: {invest:,}원\n"
+                f"  카테고리별 소비: {cat_str}"
+            )
+        return "\n".join(summary_lines)
+
+    # 질문 입력
+    if prompt := st.chat_input("예) 이번 달 식비 얼마야? / 저번 달이랑 비교해줘"):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.write(prompt)
+
+        with st.chat_message("assistant"):
+            with st.spinner("분석 중..."):
+                data_summary = get_data_summary()
+                system_prompt = f"""너는 최강부부의 가계부 AI 어시스턴트야.
+아래는 최근 3개월간의 가계부 데이터야:
+
+{data_summary}
+
+이 데이터를 바탕으로 친근하고 간결하게 한국어로 답변해줘.
+숫자는 만원 단위로 표현하고, 도움이 되는 조언도 함께 해줘."""
+
+                client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
+                response = client.messages.create(
+                    model="claude-opus-4-6",
+                    max_tokens=1024,
+                    system=system_prompt,
+                    messages=[{"role": m["role"], "content": m["content"]}
+                              for m in st.session_state.messages],
+                )
+                answer = response.content[0].text
+                st.write(answer)
+                st.session_state.messages.append({"role": "assistant", "content": answer})

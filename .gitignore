@@ -2,3 +2,4 @@
 alert_log.json
 __pycache__/
 *.pyc
+.streamlit/secrets.toml
